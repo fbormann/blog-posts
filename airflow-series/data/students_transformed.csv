@@ -1,0 +1,4 @@
+,id,sexo,idade,nota_matematica,nota_portugues,passed
+0,1,M,15,5.5,8.0,False
+1,2,F,14,10.0,9.0,True
+2,3,F,15,10.0,3.5,False
