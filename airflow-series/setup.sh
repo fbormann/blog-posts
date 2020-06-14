@@ -1,2 +1,2 @@
 docker-compose -f docker-compose-LocalExecutor.yml up -d
-docker network create --driver bridge postgres-network
+sudo docker-compose exec webserver airflow connections -a --conn_id postgres_conn --conn_type 'Postgres' --conn_login 'airflow' --conn_password 'airflow' --conn_port 5432

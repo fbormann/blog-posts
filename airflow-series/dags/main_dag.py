@@ -5,6 +5,7 @@ from datetime import timedelta, datetime
 import pandas
 from airflow.contrib.sensors.python_sensor import PythonSensor
 from airflow.models import DAG
+from airflow.operators.postgres_operator import PostgresOperator
 from airflow.operators.python_operator import PythonOperator
 
 
@@ -22,22 +23,30 @@ def detect_new_student(path_to_students, path_to_record):
     if amount_of_students > old_amount_of_students:
         logging.info(f"There are {amount_of_students - old_amount_of_students} new students.")
         amount_of_students_fp.seek(0)
-        amount_of_students_fp.write(amount_of_students)
+        amount_of_students_fp.write(str(amount_of_students))
         amount_of_students_fp.truncate()
         return True
 
     return False
 
 
-def insert_rows():
-    pass
-
-
-def transform_data(path_to_students, path_to_transformed_data):
+def transform_data(path_to_students, path_to_transformed_data, target_table, **context):
     student_df = pandas.read_csv(path_to_students)
-    student_df["passed"] = (student_df["nota_matematica"] > 7) & (student_df["nota_portugues"] > 7)
+    student_df = student_df[~student_df["aprovado"].isnull()]
+    student_df["aprovado"] = (student_df["nota_matematica"] > 7) & (
+            student_df["nota_portugues"] > 7)
 
     student_df.to_csv(path_to_transformed_data)
+
+    sql_texts = []
+    for index, row in student_df.iterrows():
+        sql_texts.append(
+            'INSERT INTO ' + target_table + ' (' + str(
+                ', '.join(student_df.columns)) + ') VALUES ' + str(tuple(row.values)))
+
+    task_instance = context['task_instance']
+    insert_query = '\n\n'.join(sql_texts)
+    task_instance.xcom_push(key="the_message", value=insert_query)
 
 
 dag = DAG("students_pipeline_v2.0", schedule_interval=timedelta(minutes=5),
@@ -51,18 +60,22 @@ with dag:
         python_callable=detect_new_student,
         op_kwargs={"path_to_students": "data/students.csv",
                    "path_to_record": "data/student_amount.txt"},
-        retries=3)
+        retries=3,
+        soft_fail=True)
 
-    transformation_operator = PythonOperator(
+    transformer_operator = PythonOperator(
         task_id="transform_student_data",
         python_callable=transform_data,
         op_kwargs={"path_to_students": "data/students.csv",
-                   "path_to_transformed_data": "data/students_transformed.csv"},
+                   "path_to_transformed_data": "data/students_transformed.csv",
+                   "target_table": "students"},
+        provide_context=True,
         retries=3)
 
-    load_operator = PythonOperator(
-        task_id="load_csv_into_pg",
-        python_callable=insert_rows,
+    load_operator = PostgresOperator(
+        task_id="load_data_into_pg",
+        sql="{{ task_instance.xcom_pull(task_ids='transform_student_data', key='insert_query') }}",
+        postgres_conn_id='postgres_conn',
         retries=3)
 
-    csv_sensor >> transformation_operator >> load_operator
+    csv_sensor >> transformer_operator >> load_operator
