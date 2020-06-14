@@ -14,12 +14,16 @@ def detect_new_student(path_to_students, path_to_record):
         return False
 
     student_df = pandas.read_csv(path_to_students)
-    amount_of_students_fp = open(path_to_record, 'r')
+    amount_of_students_fp = open(path_to_record, 'r+')
     line = amount_of_students_fp.readline()
-    amount_of_students = int(line)
+    old_amount_of_students = int(line)
 
-    if student_df.shape[0] > amount_of_students:
-        logging.info(f"There are {student_df.shape[0] - amount_of_students} new students.")
+    amount_of_students = student_df.shape[0]
+    if amount_of_students > old_amount_of_students:
+        logging.info(f"There are {amount_of_students - old_amount_of_students} new students.")
+        amount_of_students_fp.seek(0)
+        amount_of_students_fp.write(amount_of_students)
+        amount_of_students_fp.truncate()
         return True
 
     return False
