@@ -32,7 +32,7 @@ def detect_new_student(path_to_students, path_to_record):
 
 def transform_data(path_to_students, path_to_transformed_data, target_table, **context):
     student_df = pandas.read_csv(path_to_students)
-    student_df = student_df[~student_df["aprovado"].isnull()]
+    student_df = student_df[student_df["aprovado"].isnull()]
     student_df["aprovado"] = (student_df["nota_matematica"] > 7) & (
             student_df["nota_portugues"] > 7)
 
