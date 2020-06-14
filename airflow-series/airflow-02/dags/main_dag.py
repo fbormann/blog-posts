@@ -8,6 +8,22 @@ from airflow.models import DAG
 from airflow.operators.postgres_operator import PostgresOperator
 from airflow.operators.python_operator import PythonOperator
 
+# Cria connection para o operador postgres, esta parte não cabe no tutorial 02
+from airflow import settings
+from airflow.models import Connection
+
+conn = Connection(
+    conn_id='postgres_conn',
+    conn_type='Postgres',
+    host='postgres',
+    login='airflow',
+    password='airflow',
+    port=5432
+)
+session = settings.Session()  # get the session
+session.add(conn)
+session.commit()
+
 
 def detect_new_student(path_to_students, path_to_record):
     if not os.path.exists(path_to_students):
@@ -74,7 +90,7 @@ with dag:
 
     load_operator = PostgresOperator(
         task_id="load_data_into_pg",
-        sql="{{ task_instance.xcom_pull(task_ids='transform_student_data', key='insert_query') }}",
+        sql="{{ task_instance.xcom_pull(task_ids='transform_student_data', key='the_message') }}",
         postgres_conn_id='postgres_conn',
         retries=3)
 
