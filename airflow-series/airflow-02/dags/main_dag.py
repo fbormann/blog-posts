@@ -58,7 +58,7 @@ def transform_data(path_to_students, path_to_transformed_data, target_table, **c
     for index, row in student_df.iterrows():
         sql_texts.append(
             'INSERT INTO ' + target_table + ' (' + str(
-                ', '.join(student_df.columns)) + ') VALUES ' + str(tuple(row.values)))
+                ', '.join(student_df.columns)) + ') VALUES ' + str(tuple(row.values)) + ";")
 
     task_instance = context['task_instance']
     insert_query = '\n\n'.join(sql_texts)
@@ -77,7 +77,8 @@ with dag:
         op_kwargs={"path_to_students": "data/students.csv",
                    "path_to_record": "data/student_amount.txt"},
         retries=3,
-        soft_fail=True)
+        soft_fail=True,
+        retry_delay=timedelta(seconds=10))
 
     transformer_operator = PythonOperator(
         task_id="transform_student_data",
@@ -86,12 +87,14 @@ with dag:
                    "path_to_transformed_data": "data/students_transformed.csv",
                    "target_table": "students"},
         provide_context=True,
-        retries=3)
+        retries=3,
+        retry_delay=timedelta(seconds=10))
 
     load_operator = PostgresOperator(
         task_id="load_data_into_pg",
         sql="{{ task_instance.xcom_pull(task_ids='transform_student_data', key='the_message') }}",
         postgres_conn_id='postgres_conn',
-        retries=3)
+        retries=3,
+        retry_delay=timedelta(seconds=10))
 
     csv_sensor >> transformer_operator >> load_operator
